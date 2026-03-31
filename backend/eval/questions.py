@@ -1,0 +1,92 @@
+QA_PAIRS = [
+    {
+        "id": 1,
+        "source": "langchain",
+        "question": "What is LangChain Expression Language (LCEL) and what are its main benefits?",
+        "expected_answer": "LCEL is a declarative composition system built around LangChain's Runnable interface. It makes it easier to chain components together and supports streaming, async execution, and parallel execution.",
+    },
+    {
+        "id": 2,
+        "source": "langchain",
+        "question": "What streaming modes does LangChain expose for real-time updates?",
+        "expected_answer": "LangChain streaming supports updates for agent progress, messages for token streaming with metadata, and custom user-defined updates.",
+    },
+    {
+        "id": 3,
+        "source": "langchain",
+        "question": "What is short-term memory in LangGraph?",
+        "expected_answer": "Short-term memory is thread-scoped memory that tracks the ongoing conversation state within a session. It is stored as part of the graph state and persisted with checkpoints so the thread can resume.",
+    },
+    {
+        "id": 4,
+        "source": "langchain",
+        "question": "What does long-term memory store in LangGraph and how is it scoped?",
+        "expected_answer": "Long-term memory stores user-specific or application-level data across sessions. It is organized in custom namespaces rather than being limited to a single thread.",
+    },
+    {
+        "id": 5,
+        "source": "crewai",
+        "question": "What is a Crew in CrewAI and what are its key components?",
+        "expected_answer": "A Crew in CrewAI is a group of agents working together on a set of tasks. Its key components are agents, tasks, and an optional process that defines how the work is executed.",
+    },
+    {
+        "id": 6,
+        "source": "crewai",
+        "question": "What is the difference between sequential and hierarchical processes in CrewAI?",
+        "expected_answer": "Sequential processes execute tasks in their defined order and pass outputs forward as context. Hierarchical processes introduce a manager model or manager agent that delegates and coordinates tasks through a chain of command.",
+    },
+    {
+        "id": 7,
+        "source": "crewai",
+        "question": "What is a Tool in CrewAI?",
+        "expected_answer": "A Tool in CrewAI is a skill or function an agent can use to perform actions, such as searching, reading files, or interacting with external systems.",
+    },
+    {
+        "id": 8,
+        "source": "crewai",
+        "question": "How do Flows and Crews work together in CrewAI?",
+        "expected_answer": "A Flow manages application state, events, and control flow, while a Crew handles complex multi-step agent collaboration. A Flow can delegate a hard task to a Crew and continue once the Crew returns a result.",
+    },
+    {
+        "id": 9,
+        "source": "nextjs",
+        "question": "How can you fetch data in Next.js Server Components?",
+        "expected_answer": "In Server Components, Next.js lets you fetch data with asynchronous I O such as the fetch API or an ORM or database call directly inside an async component.",
+    },
+    {
+        "id": 10,
+        "source": "nextjs",
+        "question": "What are the two main ways to implement streaming in the Next.js App Router?",
+        "expected_answer": "Next.js supports streaming with a loading.js file for route-level loading states and with Suspense for component-level progressive rendering.",
+    },
+    {
+        "id": 11,
+        "source": "nextjs",
+        "question": "What is the difference between Static Generation and Server-side Rendering in Next.js?",
+        "expected_answer": "Static Generation pre-renders pages ahead of time, while Server-side Rendering renders the page on each request using server-side data fetching.",
+    },
+    {
+        "id": 12,
+        "source": "nextjs",
+        "question": "What problem does Incremental Static Regeneration solve in Next.js?",
+        "expected_answer": "Incremental Static Regeneration lets Next.js update static content after the site has been built, combining the performance of static pages with the ability to refresh data over time.",
+    },
+    {
+        "id": 13,
+        "source": "expo",
+        "question": "What is EAS Update?",
+        "expected_answer": "EAS Update is a hosted service for apps using expo-updates that lets developers ship over-the-air updates for non-native parts of the app such as JavaScript, styles, and images between app store releases.",
+    },
+    {
+        "id": 14,
+        "source": "expo",
+        "question": "When should you increment the runtime version for EAS Update?",
+        "expected_answer": "You should increment the runtime version whenever the native runtime changes, such as when adding or removing native libraries or changing native app configuration, so incompatible JavaScript updates are not delivered to the wrong binary.",
+    },
+    {
+        "id": 15,
+        "source": "expo",
+        "question": "What are Expo Application Services (EAS)?",
+        "expected_answer": "Expo Application Services are Expo's cloud services for Expo and React Native apps, including products such as EAS Build, EAS Submit, EAS Update, EAS Hosting, and related release workflow tools.",
+    },
+]

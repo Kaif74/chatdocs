@@ -1,0 +1,400 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(55, 95, 180, 0.14),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(17, 148, 115, 0.12),
+      transparent 24%
+    ),
+    linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
+  color: #18202b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: #1459a6;
+}
+
+.app-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.hero {
+  margin-bottom: 24px;
+  padding: 28px;
+  border: 1px solid rgba(24, 32, 43, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 24px 60px rgba(18, 35, 61, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  color: #48627d;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.1;
+}
+
+.hero__copy {
+  max-width: 860px;
+  margin: 16px 0 0;
+  color: #44556a;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.tab,
+.button,
+.link-button {
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.tab {
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #33455a;
+  border: 1px solid rgba(24, 32, 43, 0.08);
+}
+
+.tab--active {
+  background: #182f55;
+  color: white;
+}
+
+.button {
+  align-self: flex-start;
+  padding: 12px 18px;
+  background: #156f54;
+  color: white;
+  font-weight: 600;
+}
+
+.tab:hover,
+.button:hover,
+.link-button:hover {
+  transform: translateY(-1px);
+}
+
+.tab:disabled,
+.button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.link-button {
+  padding: 0;
+  background: transparent;
+  color: #1459a6;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(24, 32, 43, 0.08);
+  box-shadow: 0 24px 60px rgba(18, 35, 61, 0.08);
+}
+
+.panel__header h2 {
+  margin: 0;
+}
+
+.panel__header p {
+  margin: 8px 0 0;
+  color: #556577;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field span {
+  font-size: 0.94rem;
+  color: #3f5164;
+}
+
+.field--inline {
+  max-width: 260px;
+}
+
+textarea,
+select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 32, 43, 0.12);
+  background: white;
+}
+
+.notice {
+  padding: 14px 16px;
+  border-radius: 16px;
+}
+
+.notice--error {
+  background: #fdecec;
+  color: #8f2626;
+  border: 1px solid #f3c3c3;
+}
+
+.result-card,
+.status-card,
+.source-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: #fbfcfe;
+  border: 1px solid rgba(24, 32, 43, 0.08);
+}
+
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-card__header,
+.source-card__meta,
+.status-card__row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.status-card__row strong {
+  text-align: right;
+}
+
+.result-card__header h3 {
+  margin: 0;
+}
+
+.source-card__text {
+  white-space: pre-wrap;
+  color: #2e3f52;
+}
+
+.answer-text {
+  color: #2e3f52;
+}
+
+.rich-text {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rich-text__paragraph {
+  margin: 0;
+}
+
+.rich-text__heading {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.35;
+  color: #18202b;
+}
+
+.rich-text__list {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.rich-text__list li + li {
+  margin-top: 6px;
+}
+
+.rich-text__link {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.rich-text__inline-code {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #edf3fb;
+  color: #27425f;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.94em;
+}
+
+.rich-text__code {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: #edf3fb;
+  color: #27425f;
+  font-family: "Consolas", "Courier New", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rich-text__pre {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #eef4fb;
+  color: #1d3854;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(20, 89, 166, 0.12);
+  color: #1459a6;
+  font-size: 0.85rem;
+}
+
+.summary-grid,
+.counts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.counts-grid {
+  margin-top: 4px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: #f8fbff;
+  border: 1px solid rgba(24, 32, 43, 0.08);
+}
+
+.summary-card__label,
+.cell-meta {
+  color: #607286;
+  font-size: 0.9rem;
+}
+
+.summary-card strong {
+  white-space: nowrap;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.results-table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: collapse;
+}
+
+.results-table th,
+.results-table td {
+  padding: 14px 12px;
+  vertical-align: top;
+  text-align: left;
+  border-bottom: 1px solid rgba(24, 32, 43, 0.08);
+}
+
+.results-table th {
+  font-size: 0.92rem;
+  color: #556577;
+}
+
+.rubric-grid {
+  display: grid;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.source-card__link {
+  font-weight: 600;
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    padding-inline: 14px;
+  }
+
+  .hero,
+  .panel {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .tabs {
+    gap: 8px;
+  }
+
+  .tab,
+  .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .status-card__row {
+    flex-wrap: wrap;
+  }
+}
