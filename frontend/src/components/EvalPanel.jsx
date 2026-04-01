@@ -93,8 +93,9 @@ function EvalPanel() {
       <div className="panel__header">
         <h2>Evaluate the RAG pipeline</h2>
         <p>
-          Run all {questionCount || 15} benchmark questions and score the
-          results.
+          {questionCount
+            ? `Run all ${questionCount} benchmark questions and score the results.`
+            : "Run all benchmark questions and score the results."}
         </p>
       </div>
 

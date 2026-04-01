@@ -1,7 +1,10 @@
 import logging
 import os
 import re
+import time
+from copy import deepcopy
 from functools import lru_cache
+from threading import Lock
 from typing import Any
 from uuid import uuid5, NAMESPACE_DNS
 
@@ -11,6 +14,8 @@ from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import ResponseHandlingException
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http import models as qdrant_models
 
 # This project uses sentence-transformers on the PyTorch path only.
@@ -30,14 +35,38 @@ VECTOR_STORE_PROVIDER = os.getenv("VECTOR_STORE_PROVIDER", "chroma").strip().low
 DOC_SOURCES = {
     "langchain": "https://docs.langchain.com/llms-full.txt",
     "crewai": "https://docs.crewai.com/llms-full.txt",
-    "nextjs": "https://nextjs.org/llms-full.txt",
     "expo": "https://docs.expo.dev/llms-full.txt",
 }
 DEFAULT_CHROMA_BATCH_SIZE = 1000
+DEFAULT_QDRANT_BATCH_SIZE = 64
+DEFAULT_QDRANT_RETRIES = 4
+DEFAULT_QDRANT_TIMEOUT_SECONDS = 60
 
 
 class NoDocumentsIngestedError(RuntimeError):
     """Raised when the vector store is empty."""
+
+
+class IngestionInProgressError(RuntimeError):
+    """Raised when an ingestion job is already running."""
+
+
+_INGEST_PROGRESS_LOCK = Lock()
+_INGEST_PROGRESS: dict[str, Any] = {
+    "running": False,
+    "provider": VECTOR_STORE_PROVIDER,
+    "phase": "idle",
+    "total_sources": len(DOC_SOURCES),
+    "completed_sources": 0,
+    "current_source": None,
+    "counts_by_source": {source: 0 for source in DOC_SOURCES},
+    "total_chunks": 0,
+    "skipped_sources": [],
+    "last_error": None,
+    "started_at": None,
+    "finished_at": None,
+    "mode": "safe",
+}
 
 
 class MiniLMEmbeddingFunction(EmbeddingFunction[Documents]):
@@ -67,6 +96,35 @@ def get_qdrant_collection_name() -> str:
     return os.getenv("QDRANT_COLLECTION_NAME", COLLECTION_NAME)
 
 
+def _get_qdrant_batch_size() -> int:
+    raw = os.getenv("QDRANT_BATCH_SIZE", str(DEFAULT_QDRANT_BATCH_SIZE)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_QDRANT_BATCH_SIZE
+    return max(1, value)
+
+
+def _get_qdrant_retries() -> int:
+    raw = os.getenv("QDRANT_UPSERT_RETRIES", str(DEFAULT_QDRANT_RETRIES)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_QDRANT_RETRIES
+    return max(1, value)
+
+
+def _get_qdrant_timeout_seconds() -> int:
+    raw = os.getenv(
+        "QDRANT_TIMEOUT_SECONDS", str(DEFAULT_QDRANT_TIMEOUT_SECONDS)
+    ).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_QDRANT_TIMEOUT_SECONDS
+    return max(10, value)
+
+
 @lru_cache(maxsize=1)
 def get_chroma_client() -> chromadb.PersistentClient:
     persist_dir = get_persist_directory()
@@ -85,11 +143,31 @@ def get_qdrant_client() -> QdrantClient:
             "Set VECTOR_STORE_PROVIDER=qdrant and provide QDRANT_URL."
         )
 
-    return QdrantClient(url=url, api_key=api_key)
+    return QdrantClient(
+        url=url,
+        api_key=api_key,
+        timeout=_get_qdrant_timeout_seconds(),
+    )
 
 
 def _vector_provider() -> str:
     return VECTOR_STORE_PROVIDER
+
+
+def _is_qdrant_collection_missing(exc: Exception) -> bool:
+    if isinstance(exc, UnexpectedResponse):
+        return exc.status_code == 404 and "doesn't exist" in str(exc)
+    return False
+
+
+def _update_ingest_progress(**changes: Any) -> None:
+    with _INGEST_PROGRESS_LOCK:
+        _INGEST_PROGRESS.update(changes)
+
+
+def get_ingest_progress() -> dict[str, Any]:
+    with _INGEST_PROGRESS_LOCK:
+        return deepcopy(_INGEST_PROGRESS)
 
 
 def get_collection(recreate: bool = False):
@@ -117,12 +195,17 @@ def get_collection(recreate: bool = False):
 def get_collection_count() -> int:
     if _vector_provider() == "qdrant":
         client = get_qdrant_client()
-        result = client.count(
-            collection_name=get_qdrant_collection_name(),
-            count_filter=None,
-            exact=True,
-        )
-        return int(result.count)
+        try:
+            result = client.count(
+                collection_name=get_qdrant_collection_name(),
+                count_filter=None,
+                exact=True,
+            )
+            return int(result.count)
+        except Exception as exc:
+            if _is_qdrant_collection_missing(exc):
+                return 0
+            raise
 
     return get_collection().count()
 
@@ -194,19 +277,40 @@ def _source_count_chroma(collection, source: str) -> int:
 
 def _source_count_qdrant(source: str) -> int:
     client = get_qdrant_client()
-    result = client.count(
-        collection_name=get_qdrant_collection_name(),
-        count_filter=qdrant_models.Filter(
-            must=[
-                qdrant_models.FieldCondition(
-                    key="source",
-                    match=qdrant_models.MatchValue(value=source),
+    try:
+        result = client.count(
+            collection_name=get_qdrant_collection_name(),
+            count_filter=qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="source",
+                        match=qdrant_models.MatchValue(value=source),
+                    )
+                ]
+            ),
+            exact=True,
+        )
+        return int(result.count)
+    except Exception as exc:
+        if _is_qdrant_collection_missing(exc):
+            return 0
+        # Some Qdrant clusters require a payload index for filtered count.
+        # Keep status endpoint stable while index catches up.
+        if isinstance(exc, UnexpectedResponse) and exc.status_code == 400:
+            if "Index required but not found" in str(exc):
+                logger.warning(
+                    "Qdrant payload index for 'source' is not available yet; returning 0 for source count."
                 )
-            ]
-        ),
-        exact=True,
-    )
-    return int(result.count)
+                return 0
+        raise
+
+
+def get_source_chunk_count(source: str) -> int:
+    if _vector_provider() == "qdrant":
+        return _source_count_qdrant(source)
+
+    collection = get_collection()
+    return _source_count_chroma(collection, source)
 
 
 def _get_chroma_batch_size(collection) -> int:
@@ -260,11 +364,34 @@ def _add_chunks_qdrant(
             )
         )
 
-    client.upsert(
-        collection_name=collection_name,
-        points=points,
-        wait=True,
-    )
+    batch_size = _get_qdrant_batch_size()
+    retries = _get_qdrant_retries()
+
+    for start in range(0, len(points), batch_size):
+        batch = points[start : start + batch_size]
+
+        for attempt in range(1, retries + 1):
+            try:
+                client.upsert(
+                    collection_name=collection_name,
+                    points=batch,
+                    wait=True,
+                )
+                break
+            except (ResponseHandlingException, httpx.HTTPError) as exc:
+                if attempt == retries:
+                    raise
+
+                sleep_seconds = min(2**attempt, 10)
+                logger.warning(
+                    "Qdrant upsert batch failed for %s (attempt %s/%s): %s. Retrying in %ss.",
+                    source,
+                    attempt,
+                    retries,
+                    exc,
+                    sleep_seconds,
+                )
+                time.sleep(sleep_seconds)
 
 
 def _recreate_qdrant_collection() -> None:
@@ -284,6 +411,41 @@ def _recreate_qdrant_collection() -> None:
             distance=qdrant_models.Distance.COSINE,
         ),
     )
+
+    # Required for filtered count/status queries on many managed Qdrant clusters.
+    client.create_payload_index(
+        collection_name=collection_name,
+        field_name="source",
+        field_schema=qdrant_models.PayloadSchemaType.KEYWORD,
+        wait=True,
+    )
+
+
+def _ensure_qdrant_collection() -> None:
+    client = get_qdrant_client()
+    collection_name = get_qdrant_collection_name()
+
+    try:
+        client.get_collection(collection_name=collection_name)
+    except Exception as exc:
+        if not _is_qdrant_collection_missing(exc):
+            raise
+
+        vector_size = get_embedding_model().get_sentence_embedding_dimension()
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=qdrant_models.VectorParams(
+                size=vector_size,
+                distance=qdrant_models.Distance.COSINE,
+            ),
+        )
+
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name="source",
+            field_schema=qdrant_models.PayloadSchemaType.KEYWORD,
+            wait=True,
+        )
 
 
 def search_documents(
@@ -310,14 +472,26 @@ def search_documents(
                 ]
             )
 
-        results = client.search(
-            collection_name=get_qdrant_collection_name(),
-            query_vector=query_vector,
-            query_filter=query_filter,
-            limit=limit,
-            with_payload=True,
-            with_vectors=False,
-        )
+        results: Any
+        if hasattr(client, "search"):
+            results = client.search(
+                collection_name=get_qdrant_collection_name(),
+                query_vector=query_vector,
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=True,
+                with_vectors=False,
+            )
+        else:
+            query_response = client.query_points(
+                collection_name=get_qdrant_collection_name(),
+                query=query_vector,
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=True,
+                with_vectors=False,
+            )
+            results = getattr(query_response, "points", query_response)
 
         formatted_results: list[dict[str, Any]] = []
         for point in results:
@@ -383,55 +557,154 @@ def get_ingest_status() -> dict[str, Any]:
     }
 
 
-async def ingest_all_sources() -> dict[str, Any]:
+async def ingest_all_sources(
+    rebuild: bool = False,
+    refresh_existing: bool = False,
+) -> dict[str, Any]:
+    mode = "rebuild" if rebuild else "safe"
+
+    with _INGEST_PROGRESS_LOCK:
+        if _INGEST_PROGRESS["running"]:
+            raise IngestionInProgressError("Ingestion is already running")
+
+        _INGEST_PROGRESS.update(
+            {
+                "running": True,
+                "provider": _vector_provider(),
+                "phase": "initializing",
+                "total_sources": len(DOC_SOURCES),
+                "completed_sources": 0,
+                "current_source": None,
+                "counts_by_source": {source: 0 for source in DOC_SOURCES},
+                "total_chunks": 0,
+                "skipped_sources": [],
+                "last_error": None,
+                "started_at": int(time.time()),
+                "finished_at": None,
+                "mode": mode,
+            }
+        )
+
     splitter = build_splitter()
 
-    collection = None
-    if _vector_provider() == "qdrant":
-        _recreate_qdrant_collection()
-    else:
-        collection = get_collection(recreate=True)
-
-    total_chunks = 0
-    skipped_sources: list[dict[str, str]] = []
-    counts_by_source = {source: 0 for source in DOC_SOURCES}
-
-    for source, url in DOC_SOURCES.items():
-        text = await fetch_source_text(source, url)
-        if not text:
-            skipped_sources.append(
-                {"source": source, "url": url, "reason": "Failed to fetch source"}
-            )
-            continue
-
-        text = _clean_document_text(text)
-
-        chunks = splitter.split_text(text)
-        if not chunks:
-            skipped_sources.append(
-                {"source": source, "url": url, "reason": "Source returned no text"}
-            )
-            continue
-
-        ids = [f"{source}-{index}" for index in range(len(chunks))]
-        metadatas = [
-            {"source": source, "chunk_id": index, "url": url}
-            for index in range(len(chunks))
-        ]
-
+    try:
+        collection = None
         if _vector_provider() == "qdrant":
-            _add_chunks_qdrant(source, url, chunks)
+            if rebuild:
+                _recreate_qdrant_collection()
+            else:
+                _ensure_qdrant_collection()
         else:
-            _add_chunks_in_batches(collection, ids, chunks, metadatas)
-        counts_by_source[source] = len(chunks)
-        total_chunks += len(chunks)
-        logger.info("Ingested %s chunks for %s", len(chunks), source)
+            collection = get_collection(recreate=rebuild)
 
-    return {
-        "status": "completed",
-        "provider": _vector_provider(),
-        "ready": total_chunks > 0,
-        "total_chunks": total_chunks,
-        "counts_by_source": counts_by_source,
-        "skipped_sources": skipped_sources,
-    }
+        _update_ingest_progress(phase="ingesting")
+
+        total_chunks = 0
+        processed_sources = 0
+        skipped_sources: list[dict[str, str]] = []
+        counts_by_source = {source: 0 for source in DOC_SOURCES}
+
+        for source, url in DOC_SOURCES.items():
+            _update_ingest_progress(current_source=source)
+
+            if not rebuild and not refresh_existing:
+                existing_count = get_source_chunk_count(source)
+                if existing_count > 0:
+                    counts_by_source[source] = existing_count
+                    processed_sources += 1
+                    skipped_sources.append(
+                        {
+                            "source": source,
+                            "url": url,
+                            "reason": "Already ingested (safe mode skip)",
+                        }
+                    )
+                    _update_ingest_progress(
+                        completed_sources=processed_sources,
+                        counts_by_source=counts_by_source.copy(),
+                    )
+                    continue
+
+            text = await fetch_source_text(source, url)
+            if not text:
+                skipped = {
+                    "source": source,
+                    "url": url,
+                    "reason": "Failed to fetch source",
+                }
+                skipped_sources.append(skipped)
+                processed_sources += 1
+                _update_ingest_progress(
+                    completed_sources=processed_sources
+                )
+                continue
+
+            text = _clean_document_text(text)
+
+            chunks = splitter.split_text(text)
+            if not chunks:
+                skipped = {
+                    "source": source,
+                    "url": url,
+                    "reason": "Source returned no text",
+                }
+                skipped_sources.append(skipped)
+                processed_sources += 1
+                _update_ingest_progress(
+                    completed_sources=processed_sources
+                )
+                continue
+
+            ids = [f"{source}-{index}" for index in range(len(chunks))]
+            metadatas = [
+                {"source": source, "chunk_id": index, "url": url}
+                for index in range(len(chunks))
+            ]
+
+            if _vector_provider() == "qdrant":
+                _add_chunks_qdrant(source, url, chunks)
+            else:
+                _add_chunks_in_batches(collection, ids, chunks, metadatas)
+
+            processed_sources += 1
+            counts_by_source[source] = len(chunks)
+            total_chunks += len(chunks)
+            _update_ingest_progress(
+                completed_sources=processed_sources,
+                counts_by_source=counts_by_source.copy(),
+                total_chunks=total_chunks,
+            )
+            logger.info("Ingested %s chunks for %s", len(chunks), source)
+
+        result = {
+            "status": "completed",
+            "provider": _vector_provider(),
+            "mode": mode,
+            "ready": get_collection_count() > 0,
+            "total_chunks": get_collection_count(),
+            "counts_by_source": counts_by_source,
+            "skipped_sources": skipped_sources,
+        }
+
+        _update_ingest_progress(
+            running=False,
+            phase="completed",
+            completed_sources=len(DOC_SOURCES),
+            current_source=None,
+            counts_by_source=counts_by_source.copy(),
+            total_chunks=result["total_chunks"],
+            skipped_sources=skipped_sources.copy(),
+            finished_at=int(time.time()),
+            mode=mode,
+        )
+
+        return result
+    except Exception as exc:
+        _update_ingest_progress(
+            running=False,
+            phase="failed",
+            current_source=None,
+            last_error=str(exc),
+            finished_at=int(time.time()),
+        )
+        raise

@@ -1,6 +1,6 @@
 # ChatDocs
 
-A full-stack Retrieval-Augmented Generation demo that ingests LLM-friendly documentation from LangChain, CrewAI, Next.js, and Expo, answers developer questions from those docs, and evaluates answer quality with automatic metrics plus human rubric scoring.
+A full-stack Retrieval-Augmented Generation demo that ingests LLM-friendly documentation from LangChain, CrewAI, and Expo, answers developer questions from those docs, and evaluates answer quality with automatic metrics plus human rubric scoring.
 
 ## Stack
 
@@ -49,6 +49,8 @@ Set:
 OPENROUTER_API_KEY=
 NVIDIA_API_KEY=
 MISTRAL_API_KEY=
+LLM_PROVIDER_TIMEOUT_SECONDS=15
+EVAL_CONCURRENCY=6
 
 VECTOR_STORE_PROVIDER=chroma
 CHROMA_PERSIST_DIR=./chroma_db
@@ -56,6 +58,9 @@ CHROMA_PERSIST_DIR=./chroma_db
 QDRANT_URL=
 QDRANT_API_KEY=
 QDRANT_COLLECTION_NAME=docs
+QDRANT_BATCH_SIZE=64
+QDRANT_UPSERT_RETRIES=4
+QDRANT_TIMEOUT_SECONDS=60
 
 AUTO_INGEST_ON_STARTUP=true
 ```
@@ -81,7 +86,7 @@ Recommended workflow:
 uvicorn main:app --reload
 ```
 
-The backend will check whether Chroma already has data on startup. If the collection is empty, it will automatically ingest all four documentation sources.
+The backend will check whether Chroma already has data on startup. If the collection is empty, it will automatically ingest all configured documentation sources.
 
 Note: on the very first startup, `sentence-transformers/all-MiniLM-L6-v2` may need to be downloaded if it is not already cached locally. That initial model download can add roughly 1 to 2 minutes before the app is ready.
 
@@ -105,18 +110,27 @@ By default, the frontend expects the FastAPI backend at `http://localhost:8000`.
 ## Main Features
 
 - Chat tab: ask a question, optionally filter by source, and inspect retrieved chunks
-- Evaluate tab: run all 15 benchmark questions and review automatic metrics plus local human rubric scores
-- Ingest tab: inspect chunk counts and rebuild the Chroma collection
+- Evaluate tab: run all benchmark questions and review automatic metrics plus local human rubric scores
+- Ingest tab: inspect chunk counts, run safe sync, and rebuild vectors only when required
 - Empty-store protection: `/query` and `/eval/run` return a clear `503` with `No documents ingested yet` if the collection is empty
 
 ## API Endpoints
 
 - `POST /ingest`
 - `GET /ingest/status`
+- `GET /ingest/progress`
 - `GET /health`
 - `POST /query`
 - `POST /eval/run`
 - `GET /eval/questions`
+
+`POST /ingest` modes:
+
+- Default safe mode: ingests only missing sources and keeps existing vectors.
+- Full rebuild: `POST /ingest?rebuild=true` wipes and recreates the collection first.
+- Refresh existing sources without full wipe: `POST /ingest?refresh_existing=true`.
+
+Important: Full rebuild is destructive for the current vector collection and can take much longer. Prefer safe mode unless a full re-index is truly needed.
 
 ## Deployment Notes
 

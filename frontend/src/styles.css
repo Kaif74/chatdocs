@@ -190,6 +190,12 @@ select {
   border: 1px solid #f3c3c3;
 }
 
+.notice--warning {
+  background: #fff7e8;
+  color: #7d4b00;
+  border: 1px solid #f2d7a6;
+}
+
 .result-card,
 .status-card,
 .source-card {

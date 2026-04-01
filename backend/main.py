@@ -12,8 +12,10 @@ from eval.questions import QA_PAIRS
 from eval.runner import run_full_evaluation
 from rag.generator import LLMProviderError
 from rag.ingestor import (
+    IngestionInProgressError,
     NoDocumentsIngestedError,
     get_collection_count,
+    get_ingest_progress,
     get_ingest_status,
     ingest_all_sources,
 )
@@ -33,7 +35,7 @@ def _is_enabled(value: str | None, default: bool = True) -> bool:
 
 class QueryRequest(BaseModel):
     question: str = Field(min_length=1)
-    source_filter: Literal["langchain", "crewai", "nextjs", "expo"] | None = None
+    source_filter: Literal["langchain", "crewai", "expo"] | None = None
 
 
 @asynccontextmanager
@@ -67,13 +69,27 @@ app.add_middleware(
 
 
 @app.post("/ingest")
-async def ingest_documents():
-    return await ingest_all_sources()
+async def ingest_documents(
+    rebuild: bool = False,
+    refresh_existing: bool = False,
+):
+    try:
+        return await ingest_all_sources(
+            rebuild=rebuild,
+            refresh_existing=refresh_existing,
+        )
+    except IngestionInProgressError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/ingest/status")
 async def ingest_status():
     return get_ingest_status()
+
+
+@app.get("/ingest/progress")
+async def ingest_progress():
+    return get_ingest_progress()
 
 
 @app.get("/health")

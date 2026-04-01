@@ -8,7 +8,6 @@ const SOURCE_OPTIONS = [
   { value: "", label: "All sources" },
   { value: "langchain", label: "LangChain" },
   { value: "crewai", label: "CrewAI" },
-  { value: "nextjs", label: "Next.js" },
   { value: "expo", label: "Expo" },
 ];
 
@@ -47,7 +46,10 @@ function ChatPanel() {
     <section className="panel">
       <div className="panel__header">
         <h2>Ask the docs</h2>
-        <p>Query the ingested framework documentation and inspect the retrieved evidence.</p>
+        <p>
+          Query the ingested framework documentation and inspect the retrieved
+          evidence.
+        </p>
       </div>
 
       <form className="stack" onSubmit={handleSubmit}>
@@ -63,7 +65,10 @@ function ChatPanel() {
 
         <label className="field field--inline">
           <span>Source filter</span>
-          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+          >
             {SOURCE_OPTIONS.map((option) => (
               <option key={option.value || "all"} value={option.value}>
                 {option.label}
@@ -92,7 +97,8 @@ function ChatPanel() {
             className="link-button"
             onClick={() => setShowSources((current) => !current)}
           >
-            {showSources ? "Hide" : "Show"} retrieved chunks ({result.sources.length})
+            {showSources ? "Hide" : "Show"} retrieved chunks (
+            {result.sources.length})
           </button>
 
           {showSources ? (

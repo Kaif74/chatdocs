@@ -1,4 +1,5 @@
 import asyncio
+import os
 from statistics import mean
 from typing import Any
 
@@ -11,7 +12,18 @@ from eval.questions import QA_PAIRS
 from rag.ingestor import ensure_documents_ingested
 from rag.pipeline import run_rag_pipeline
 
-EVAL_CONCURRENCY = 4
+DEFAULT_EVAL_CONCURRENCY = 6
+
+
+def _get_eval_concurrency() -> int:
+    raw = os.getenv("EVAL_CONCURRENCY", str(DEFAULT_EVAL_CONCURRENCY)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_EVAL_CONCURRENCY
+
+    # Keep parallelism bounded to avoid overwhelming provider rate limits.
+    return max(1, min(value, 12))
 
 
 async def _evaluate_question(
@@ -50,7 +62,7 @@ async def _evaluate_question(
 async def run_full_evaluation() -> dict[str, Any]:
     ensure_documents_ingested()
 
-    semaphore = asyncio.Semaphore(EVAL_CONCURRENCY)
+    semaphore = asyncio.Semaphore(_get_eval_concurrency())
     tasks = [
         _evaluate_question(question_pair, semaphore) for question_pair in QA_PAIRS
     ]
