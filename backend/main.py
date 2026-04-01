@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -24,6 +25,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _is_enabled(value: str | None, default: bool = True) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class QueryRequest(BaseModel):
     question: str = Field(min_length=1)
     source_filter: Literal["langchain", "crewai", "nextjs", "expo"] | None = None
@@ -31,8 +38,15 @@ class QueryRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    auto_ingest = _is_enabled(os.getenv("AUTO_INGEST_ON_STARTUP"), default=True)
+
+    if not auto_ingest:
+        logger.info("AUTO_INGEST_ON_STARTUP is disabled, skipping startup ingestion.")
+        yield
+        return
+
     if get_collection_count() == 0:
-        logger.info("Chroma collection is empty, starting initial ingestion.")
+        logger.info("Vector store is empty, starting initial ingestion.")
         try:
             await ingest_all_sources()
         except Exception as exc:

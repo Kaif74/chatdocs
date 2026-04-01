@@ -49,8 +49,31 @@ Set:
 OPENROUTER_API_KEY=
 NVIDIA_API_KEY=
 MISTRAL_API_KEY=
+
+VECTOR_STORE_PROVIDER=chroma
 CHROMA_PERSIST_DIR=./chroma_db
+
+QDRANT_URL=
+QDRANT_API_KEY=
+QDRANT_COLLECTION_NAME=docs
+
+AUTO_INGEST_ON_STARTUP=true
 ```
+
+For production reliability on low-memory hosts, prefer Qdrant Cloud over local Chroma persistence:
+
+```env
+VECTOR_STORE_PROVIDER=qdrant
+QDRANT_URL=https://<your-cluster>.cloud.qdrant.io
+QDRANT_API_KEY=<your-key>
+QDRANT_COLLECTION_NAME=docs
+AUTO_INGEST_ON_STARTUP=false
+```
+
+Recommended workflow:
+
+- Keep `AUTO_INGEST_ON_STARTUP=true` locally for development.
+- In production, set `AUTO_INGEST_ON_STARTUP=false`, then call `POST /ingest` once after deploy.
 
 4. Start the backend:
 
@@ -104,7 +127,9 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
 - Configure Railway healthchecks to call `GET /health`.
-- If you deploy Chroma on Railway, use a persistent volume for `CHROMA_PERSIST_DIR` so stored chunks survive restarts.
+- For stable Railway deploys, use Qdrant Cloud by setting `VECTOR_STORE_PROVIDER=qdrant` and Qdrant env vars.
+- If you stay on Chroma in Railway, use a persistent volume for `CHROMA_PERSIST_DIR` so stored chunks survive restarts.
+- Set `AUTO_INGEST_ON_STARTUP=false` in Railway to avoid heavy cold-start ingestion.
 - For Vercel, set the frontend root to `chatdocs/frontend` and set `VITE_API_BASE_URL` to your Railway backend URL.
 
 ## Notes
